@@ -1,12 +1,20 @@
 import os
 import sys
+import logging
+
+logger = logging.getLogger("vercel_entry")
 
 # Vercel serverless: add project root to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, project_root)
 
 # Force uploads to /tmp (only writable dir on Vercel)
-os.environ["UPLOAD_DIR"] = "/tmp/uploads"
+os.environ.setdefault("UPLOAD_DIR", "/tmp/uploads")
+os.makedirs("/tmp/uploads", exist_ok=True)
 
-from main import app
-
-# Vercel expects the ASGI app as `app`
+try:
+    from main import app
+    logger.info("[VERCEL] App loaded successfully")
+except Exception as e:
+    logger.error("[VERCEL] Failed to load app: %s", e)
+    raise

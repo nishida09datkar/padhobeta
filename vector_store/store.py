@@ -1,7 +1,13 @@
 import numpy as np
-import faiss
-from fastembed import TextEmbedding
-from config import settings
+import logging
+
+logger = logging.getLogger("vector_store")
+
+
+def _lazy_imports():
+    import faiss
+    from fastembed import TextEmbedding
+    return faiss, TextEmbedding
 
 
 # Model dimension mapping
@@ -15,16 +21,22 @@ MODEL_DIMS = {
 
 class DocumentStore:
     def __init__(self):
+        from config import settings
+        faiss, TextEmbedding = _lazy_imports()
+
         model_name = settings.EMBEDDING_MODEL
-        # Map old model names to fastembed-compatible ones
         if model_name == "all-MiniLM-L6-v2":
             model_name = "BAAI/bge-small-en-v1.5"
+
+        logger.info("[STORE] Loading embedding model: %s", model_name)
         self.model = TextEmbedding(model_name)
+        self.faiss = faiss
         dim = MODEL_DIMS.get(model_name, 384)
         self.index = faiss.IndexFlatIP(dim)
         self.documents: dict[str, dict] = {}
         self.chunk_metadata: list[dict] = []
         self._id_counter = 0
+        logger.info("[STORE] Ready (dim=%d)", dim)
 
     def _encode(self, texts: list[str]) -> np.ndarray:
         embeddings = list(self.model.embed(texts))
@@ -58,6 +70,7 @@ class DocumentStore:
         }
 
     def search(self, query: str, top_k: int | None = None, doc_id: str | None = None) -> list[dict]:
+        from config import settings
         if top_k is None:
             top_k = settings.TOP_K_CHUNKS
 

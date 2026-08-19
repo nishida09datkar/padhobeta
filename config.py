@@ -21,7 +21,7 @@ class Settings:
     HIGHER_MODEL: str = os.getenv("HIGHER_MODEL", "openai/gpt-oss-120b")
     ORCHESTRATOR_MODEL: str = os.getenv("ORCHESTRATOR_MODEL", "allam-2-7b")
     ORCHESTRATOR_DEBUG: bool = os.getenv("ORCHESTRATOR_DEBUG", "false").lower() == "true"
-    AI_WARMUP_ENABLED: bool = os.getenv("AI_WARMUP_ENABLED", "true").lower() == "true"
+    AI_WARMUP_ENABLED: bool = os.getenv("AI_WARMUP_ENABLED", "false").lower() == "true"
     ROUTING_CACHE_ENABLED: bool = os.getenv("ROUTING_CACHE_ENABLED", "true").lower() == "true"
     MAX_MODEL_FALLBACKS: int = int(os.getenv("MAX_MODEL_FALLBACKS", "1"))
 

@@ -33,6 +33,7 @@ from agents.query_classifier import classify_query, detect_casual, get_casual_re
 from agents.multi_agent_orchestrator import run as multiagent_run
 from agents.response_generator import generate_rejection_response
 from agents.performance import perf_tracker, RequestMetrics
+from agents.routing_cache import routing_cache
 from vector_store.store import DocumentStore
 from session_manager import (
     create_new_session,
@@ -114,7 +115,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-store = DocumentStore()
+store = None
+
+
+def get_store():
+    global store
+    if store is None:
+        store = DocumentStore()
+    return store
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -169,7 +177,7 @@ async def upload_document(file: UploadFile = File(...)):
 
         parsed, chunks = parse_document(save_path, file.filename)
 
-        store.add_document(
+        get_store().add_document(
             doc_id=doc_id,
             chunks=chunks,
             filename=file.filename,
@@ -245,7 +253,7 @@ def chat(request: ChatRequest):
     logger.info("[CHAT] query='%s' launching multiagent system", request.query[:80])
 
     result = multiagent_run(
-        store=store,
+        store=get_store(),
         query=request.query,
         doc_id=request.document_id,
     )
@@ -412,7 +420,7 @@ def get_dag():
 
 @app.get("/documents", response_model=DocumentsList)
 def list_documents():
-    docs = store.list_documents()
+    docs = get_store().list_documents()
     document_list = [
         DocumentInfo(
             id=d["id"],
@@ -428,7 +436,7 @@ def list_documents():
 
 @app.delete("/documents/{doc_id}")
 def delete_document(doc_id: str):
-    success = store.remove_document(doc_id)
+    success = get_store().remove_document(doc_id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found.")
 
