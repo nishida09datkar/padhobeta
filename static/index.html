@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Padhobeta - Your Study Buddy</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0f0f23;--sidebar:#16163a;--chat:#0f0f23;
+  --accent:#7c5cfc;--accent2:#a78bfa;--accent-glow:rgba(124,92,252,.15);
+  --user-bg:#1e1e4a;--bot-bg:#1a1a3e;
+  --text:#e2e2f0;--text-dim:#8888aa;--text-bright:#ffffff;
+  --border:#2a2a5a;--input-bg:#1a1a3e;
+  --success:#34d399;--danger:#f87171;--warn:#fbbf24;
+}
+body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
+.sidebar{width:320px;background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-header h1{font-size:1.5rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:flex;align-items:center;gap:8px}
+.sidebar-header h1 span{font-size:1.8rem;-webkit-text-fill-color:initial}
+.sidebar-header p{font-size:.8rem;color:var(--text-dim);margin-top:4px}
+
+.new-chat-btn{margin:16px;padding:12px;border-radius:12px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;font-family:inherit}
+.new-chat-btn:hover{background:var(--accent-glow);border-color:var(--accent2);color:var(--accent2)}
+
+.upload-zone{margin:0 16px 16px;padding:20px;border:2px dashed var(--border);border-radius:12px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:var(--accent-glow)}
+.upload-zone .icon{font-size:2rem;margin-bottom:8px}
+.upload-zone p{font-size:.85rem;color:var(--text-dim)}
+.upload-zone .formats{font-size:.7rem;color:var(--text-dim);margin-top:6px;opacity:.7}
+#file-input{display:none}
+
+.section-label{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);padding:12px 16px 6px;margin-top:4px}
+
+.doc-list,.session-list{overflow-y:auto}
+.session-list{flex:1;padding:4px 8px}
+.doc-list{padding:8px 16px;max-height:200px}
+
+.doc-item,.session-item{padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:10px;margin-bottom:4px;border:1px solid transparent}
+.doc-item:hover,.session-item:hover{background:var(--accent-glow);border-color:var(--border)}
+.doc-item.active,.session-item.active{background:var(--accent-glow);border-color:var(--accent)}
+.doc-item .doc-icon,.session-item .session-icon{font-size:1.4rem;flex-shrink:0}
+.doc-item .doc-info,.session-item .session-info{flex:1;min-width:0}
+.doc-item .doc-name,.session-item .session-name{font-size:.85rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-item .doc-meta,.session-item .session-meta{font-size:.7rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-item .doc-delete,.session-item .session-delete{opacity:0;color:var(--danger);cursor:pointer;font-size:.9rem;padding:4px;transition:opacity .15s}
+.doc-item:hover .doc-delete,.session-item:hover .session-delete{opacity:1}
+
+.no-docs,.no-sessions{text-align:center;padding:20px 16px;color:var(--text-dim);font-size:.8rem}
+
+.sidebar-divider{height:1px;background:var(--border);margin:8px 16px}
+
+.chat-area{flex:1;display:flex;flex-direction:column;background:var(--chat)}
+.chat-header{padding:16px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.chat-header .status{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--text-dim)}
+.chat-header .status .dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.chat-header .right{display:flex;align-items:center;gap:12px}
+.chat-header .model-tag{font-size:.7rem;padding:3px 10px;border-radius:20px;background:var(--accent-glow);color:var(--accent2);border:1px solid var(--border)}
+.chat-header .session-tag{font-size:.65rem;padding:3px 8px;border-radius:12px;background:rgba(52,211,153,.1);color:var(--success);border:1px solid rgba(52,211,153,.3);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.messages{flex:1;overflow-y:auto;padding:24px;display:flex;flex-direction:column;gap:16px}
+.messages::-webkit-scrollbar{width:4px}
+
+.welcome{text-align:center;padding:60px 20px}
+.welcome .logo{font-size:4rem;margin-bottom:16px}
+.welcome h2{font-size:1.5rem;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+.welcome p{color:var(--text-dim);font-size:.9rem;max-width:500px;margin:0 auto;line-height:1.6}
+.welcome .tips{display:flex;gap:12px;justify-content:center;margin-top:24px;flex-wrap:wrap}
+.welcome .tip{padding:8px 16px;border-radius:20px;background:var(--user-bg);border:1px solid var(--border);font-size:.8rem;color:var(--text-dim);cursor:pointer;transition:all .2s}
+.welcome .tip:hover{border-color:var(--accent);color:var(--accent2);background:var(--accent-glow)}
+
+.msg{display:flex;gap:12px;max-width:80%;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.msg.user{align-self:flex-end;flex-direction:row-reverse}
+.msg.bot{align-self:flex-start}
+.msg .avatar{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0}
+.msg.user .avatar{background:var(--accent)}
+.msg.bot .avatar{background:var(--bot-bg);border:1px solid var(--border)}
+.msg .bubble{padding:12px 16px;border-radius:16px;line-height:1.6;font-size:.9rem}
+.msg.user .bubble{background:var(--user-bg);border:1px solid var(--border);border-top-right-radius:4px}
+.msg.bot .bubble{background:var(--bot-bg);border:1px solid var(--border);border-top-left-radius:4px}
+.msg .bubble p{margin-bottom:8px}
+.msg .bubble p:last-child{margin-bottom:0}
+.msg .bubble strong{color:var(--text-bright)}
+.msg .bubble code{background:rgba(124,92,252,.15);padding:1px 6px;border-radius:4px;font-size:.82rem;color:var(--accent2)}
+.msg .bubble pre{background:rgba(0,0,0,.3);padding:10px;border-radius:8px;overflow-x:auto;margin:8px 0;font-size:.82rem}
+.msg .bubble ul,.msg .bubble ol{padding-left:20px;margin:8px 0}
+.msg .bubble li{margin-bottom:4px}
+.msg .sources{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:.75rem;color:var(--text-dim);display:flex;align-items:center;gap:6px}
+
+.typing{display:flex;gap:4px;padding:12px 16px}
+.typing span{width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:bounce .6s infinite alternate}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{to{opacity:.3;transform:translateY(-4px)}}
+
+.input-area{padding:16px 24px;border-top:1px solid var(--border);background:var(--sidebar)}
+.input-wrapper{display:flex;gap:12px;align-items:flex-end}
+.input-box{flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:16px;padding:12px 16px;color:var(--text);font-size:.9rem;font-family:inherit;resize:none;outline:none;min-height:44px;max-height:120px;line-height:1.5;transition:border-color .2s}
+.input-box:focus{border-color:var(--accent)}
+.input-box::placeholder{color:var(--text-dim)}
+.send-btn{width:44px;height:44px;border-radius:12px;border:none;background:var(--accent);color:white;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.send-btn:hover{background:var(--accent2);transform:scale(1.05)}
+.send-btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.input-hint{font-size:.7rem;color:var(--text-dim);text-align:center;margin-top:8px}
+
+@media(max-width:768px){
+  .sidebar{position:fixed;left:-320px;top:0;bottom:0;z-index:100;transition:left .3s}
+  .sidebar.open{left:0}
+  .mobile-toggle{display:flex!important}
+  .msg{max-width:95%}
+}
+.mobile-toggle{display:none;position:fixed;top:12px;left:12px;z-index:101;width:40px;height:40px;border-radius:10px;background:var(--sidebar);border:1px solid var(--border);color:var(--text);font-size:1.2rem;cursor:pointer;align-items:center;justify-content:center}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+.overlay.show{display:block}
+</style>
+</head>
+<body>
+
+<button class="mobile-toggle" onclick="toggleSidebar()">&#9776;</button>
+<div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h1><span>&#128218;</span> Padhobeta</h1>
+    <p>Your AI Study Buddy</p>
+  </div>
+
+  <button class="new-chat-btn" onclick="newChat()">&#10010; New Chat</button>
+
+  <div class="section-label">Chat History</div>
+  <div class="session-list" id="session-list">
+    <div class="no-sessions" id="no-sessions">No previous chats</div>
+  </div>
+
+  <div class="sidebar-divider"></div>
+
+  <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="icon">&#128196;</div>
+    <p>Drop a file here or click to upload</p>
+    <div class="formats">PDF, DOCX, PPTX, JPG, PNG</div>
+  </div>
+  <input type="file" id="file-input" accept=".pdf,.docx,.pptx,.jpg,.jpeg,.png,.bmp,.tiff,.tif">
+
+  <div class="section-label">Documents</div>
+  <div class="doc-list" id="doc-list">
+    <div class="no-docs" id="no-docs">No documents uploaded yet</div>
+  </div>
+</aside>
+
+<main class="chat-area">
+  <div class="chat-header">
+    <div class="status"><div class="dot"></div> Ready</div>
+    <div class="right">
+      <div class="session-tag" id="session-tag" style="display:none"></div>
+      <div class="model-tag">qwen3.6-27b &middot; allam-2-7b</div>
+    </div>
+  </div>
+
+  <div class="messages" id="messages">
+    <div class="welcome" id="welcome">
+      <div class="logo">&#128218;</div>
+      <h2>Hey, I'm Padhobeta!</h2>
+      <p>Upload an academic document and ask me anything about it. I'll help you understand concepts, answer questions, and break down complex topics.</p>
+      <div class="tips">
+        <div class="tip" onclick="useTip(this)">Explain this concept</div>
+        <div class="tip" onclick="useTip(this)">Summarize the key points</div>
+        <div class="tip" onclick="useTip(this)">Give me practice questions</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrapper">
+      <textarea class="input-box" id="input-box" placeholder="Ask a question about your document..." rows="1"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">&#10148;</button>
+    </div>
+    <div class="input-hint">I only answer academic questions based on your uploaded documents</div>
+  </div>
+</main>
+
+<script>
+const API = '';
+let documents = [];
+let activeDocId = null;
+let sending = false;
+let currentSessionId = null;
+let sessions = [];
+
+const messagesEl = document.getElementById('messages');
+const welcomeEl = document.getElementById('welcome');
+const inputBox = document.getElementById('input-box');
+const sendBtn = document.getElementById('send-btn');
+const docListEl = document.getElementById('doc-list');
+const noDocsEl = document.getElementById('no-docs');
+const sessionListEl = document.getElementById('session-list');
+const noSessionsEl = document.getElementById('no-sessions');
+const sessionTag = document.getElementById('session-tag');
+const fileInput = document.getElementById('file-input');
+const uploadZone = document.getElementById('upload-zone');
+
+inputBox.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+inputBox.addEventListener('input', () => {
+  inputBox.style.height = 'auto';
+  inputBox.style.height = Math.min(inputBox.scrollHeight, 120) + 'px';
+});
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) uploadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) uploadFile(fileInput.files[0]);
+  fileInput.value = '';
+});
+
+function useTip(el) {
+  inputBox.value = el.textContent;
+  inputBox.focus();
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+
+async function uploadFile(file) {
+  const allowed = ['.pdf','.docx','.pptx','.jpg','.jpeg','.png','.bmp','.tiff','.tif'];
+  const ext = '.' + file.name.split('.').pop().toLowerCase();
+  if (!allowed.includes(ext)) {
+    alert('Unsupported file type. Please upload PDF, DOCX, PPTX, or image files.');
+    return;
+  }
+
+  uploadZone.innerHTML = '<div class="icon">&#9203;</div><p>Uploading ' + file.name + '...</p>';
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch(API + '/upload', { method: 'POST', body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+
+    documents.push({ id: data.document_id, filename: data.filename, doc_type: data.doc_type, chunk_count: data.chunk_count });
+    activeDocId = data.document_id;
+    renderDocs();
+    addSystemMsg('Uploaded "' + data.filename + '" (' + data.chunk_count + ' chunks). Ask me anything about it!');
+
+  } catch (err) {
+    addSystemMsg('Upload failed: ' + err.message);
+  }
+
+  uploadZone.innerHTML = '<div class="icon">&#128196;</div><p>Drop a file here or click to upload</p><div class="formats">PDF, DOCX, PPTX, JPG, PNG</div>';
+}
+
+function renderDocs() {
+  noDocsEl.style.display = documents.length ? 'none' : 'block';
+  const existing = docListEl.querySelectorAll('.doc-item');
+  existing.forEach(el => el.remove());
+
+  documents.forEach(doc => {
+    const el = document.createElement('div');
+    el.className = 'doc-item' + (doc.id === activeDocId ? ' active' : '');
+    const icons = { pdf:'&#128211;', docx:'&#128196;', pptx:'&#128200;', image:'&#127748;' };
+    el.innerHTML = `
+      <div class="doc-icon">${icons[doc.doc_type] || '&#128196;'}</div>
+      <div class="doc-info">
+        <div class="doc-name">${doc.filename}</div>
+        <div class="doc-meta">${doc.chunk_count} chunks</div>
+      </div>
+      <div class="doc-delete" onclick="event.stopPropagation();deleteDoc('${doc.id}')">&#128465;</div>
+    `;
+    el.onclick = () => { activeDocId = doc.id; renderDocs(); };
+    docListEl.appendChild(el);
+  });
+}
+
+async function deleteDoc(id) {
+  try {
+    await fetch(API + '/documents/' + id, { method: 'DELETE' });
+    documents = documents.filter(d => d.id !== id);
+    if (activeDocId === id) activeDocId = documents.length ? documents[0].id : null;
+    renderDocs();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function renderSessions() {
+  noSessionsEl.style.display = sessions.length ? 'none' : 'block';
+  sessionListEl.querySelectorAll('.session-item').forEach(el => el.remove());
+
+  sessions.forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'session-item' + (s.session_id === currentSessionId ? ' active' : '');
+    const date = new Date(s.created_at).toLocaleDateString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    el.innerHTML = `
+      <div class="session-icon">&#128172;</div>
+      <div class="session-info">
+        <div class="session-name">Chat ${s.session_id.substring(0,8)}</div>
+        <div class="session-meta">${date}${s.document_id ? ' &middot; ' + s.document_id.substring(0,6) : ''}</div>
+      </div>
+      <div class="session-delete" onclick="event.stopPropagation();deleteSession('${s.session_id}')" title="Delete session">&#128465;</div>
+    `;
+    el.onclick = () => switchSession(s.session_id);
+    sessionListEl.appendChild(el);
+  });
+}
+
+async function loadSessions() {
+  try {
+    const res = await fetch(API + '/sessions');
+    const data = await res.json();
+    sessions = data.sessions || [];
+    renderSessions();
+  } catch (err) {}
+}
+
+async function loadSessionMessages(sessionId) {
+  try {
+    const res = await fetch(API + '/sessions/' + sessionId);
+    const data = await res.json();
+    const msgs = data.messages || [];
+
+    messagesEl.innerHTML = '';
+    if (msgs.length === 0) {
+      messagesEl.innerHTML = `
+        <div class="welcome" id="welcome">
+          <div class="logo">&#128218;</div>
+          <h2>Hey, I'm Padhobeta!</h2>
+          <p>Continue your previous conversation or ask something new.</p>
+        </div>`;
+      return;
+    }
+
+    msgs.forEach(m => {
+      const role = m.role === 'user' ? 'user' : 'bot';
+      const text = m.content;
+      const avatar = role === 'user' ? '&#128100;' : '&#128218;';
+      const msg = document.createElement('div');
+      msg.className = 'msg ' + role;
+      msg.innerHTML = `<div class="avatar">${avatar}</div><div class="bubble">${formatText(text)}</div>`;
+      messagesEl.appendChild(msg);
+    });
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function switchSession(sessionId) {
+  currentSessionId = sessionId;
+  const s = sessions.find(x => x.session_id === sessionId);
+  if (s) {
+    sessionTag.style.display = 'block';
+    sessionTag.textContent = 'Session: ' + sessionId.substring(0, 12) + '...';
+  }
+  renderSessions();
+  loadSessionMessages(sessionId);
+}
+
+function newChat() {
+  currentSessionId = null;
+  sessionTag.style.display = 'none';
+  messagesEl.innerHTML = `
+    <div class="welcome" id="welcome">
+      <div class="logo">&#128218;</div>
+      <h2>Hey, I'm Padhobeta!</h2>
+      <p>Upload an academic document and ask me anything about it. I'll help you understand concepts, answer questions, and break down complex topics.</p>
+      <div class="tips">
+        <div class="tip" onclick="useTip(this)">Explain this concept</div>
+        <div class="tip" onclick="useTip(this)">Summarize the key points</div>
+        <div class="tip" onclick="useTip(this)">Give me practice questions</div>
+      </div>
+    </div>`;
+  renderSessions();
+  inputBox.focus();
+}
+
+function addMsg(role, text, sources) {
+  const w = document.getElementById('welcome');
+  if (w) w.remove();
+
+  const msg = document.createElement('div');
+  msg.className = 'msg ' + role;
+
+  const avatar = role === 'user' ? '&#128100;' : '&#128218;';
+  let html = formatText(text);
+  if (sources && sources.length) {
+    html += '<div class="sources">&#128204; ' + sources.join(', ') + '</div>';
+  }
+  msg.innerHTML = `<div class="avatar">${avatar}</div><div class="bubble">${html}</div>`;
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addSystemMsg(text) {
+  const msg = document.createElement('div');
+  msg.className = 'msg bot';
+  msg.innerHTML = `<div class="avatar">&#128218;</div><div class="bubble" style="color:var(--accent2);font-style:italic">${text}</div>`;
+  messagesEl.appendChild(msg);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showTyping() {
+  const el = document.createElement('div');
+  el.className = 'msg bot';
+  el.id = 'typing-indicator';
+  el.innerHTML = `<div class="avatar">&#128218;</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  messagesEl.appendChild(el);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function formatText(text) {
+  text = text.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/^\s*[-*]\s+(.+)/gm, '<li>$1</li>');
+  text = text.replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>');
+  text = text.replace(/^\s*(\d+)\.\s+(.+)/gm, '<li>$2</li>');
+  text = text.replace(/\n{2,}/g, '</p><p>');
+  text = text.replace(/\n/g, '<br>');
+  text = '<p>' + text + '</p>';
+  return text;
+}
+
+async function sendMessage() {
+  const query = inputBox.value.trim();
+  if (!query || sending) return;
+
+  sending = true;
+  sendBtn.disabled = true;
+  inputBox.value = '';
+  inputBox.style.height = 'auto';
+
+  addMsg('user', query);
+  showTyping();
+
+  try {
+    const body = { query };
+    if (activeDocId) body.document_id = activeDocId;
+    if (currentSessionId) body.session_id = currentSessionId;
+
+    const res = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    removeTyping();
+
+    if (data.session_id && data.session_id !== currentSessionId) {
+      currentSessionId = data.session_id;
+      sessionTag.style.display = 'block';
+      sessionTag.textContent = 'Session: ' + data.session_id.substring(0, 12) + '...';
+      loadSessions();
+    }
+
+    if (!data.is_educational) {
+      addMsg('bot', data.answer);
+    } else {
+      addMsg('bot', data.answer, data.sources);
+    }
+
+  } catch (err) {
+    removeTyping();
+    addMsg('bot', 'Something went wrong. Make sure the server is running on port 8000.');
+  }
+
+  sending = false;
+  sendBtn.disabled = false;
+  inputBox.focus();
+}
+
+async function loadDocs() {
+  try {
+    const res = await fetch(API + '/documents');
+    const data = await res.json();
+    documents = data.documents || [];
+    if (documents.length) activeDocId = documents[0].id;
+    renderDocs();
+  } catch (err) {}
+}
+
+loadDocs();
+loadSessions();
+inputBox.focus();
+</script>
+</body>
+</html>
