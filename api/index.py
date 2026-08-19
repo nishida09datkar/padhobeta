@@ -8,9 +8,15 @@ logger = logging.getLogger("vercel_entry")
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-# Force uploads to /tmp (only writable dir on Vercel)
+# Only writable dir on Vercel is /tmp
 os.environ.setdefault("UPLOAD_DIR", "/tmp/uploads")
 os.makedirs("/tmp/uploads", exist_ok=True)
+
+# Redirect HuggingFace model cache to /tmp (read-only filesystem elsewhere)
+os.environ.setdefault("HF_HOME", "/tmp/hf_cache")
+os.environ.setdefault("TRANSFORMERS_CACHE", "/tmp/hf_cache")
+os.environ.setdefault("HF_HUB_CACHE", "/tmp/hf_cache")
+os.makedirs("/tmp/hf_cache", exist_ok=True)
 
 try:
     from main import app
