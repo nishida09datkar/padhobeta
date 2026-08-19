@@ -1,25 +1,41 @@
 import numpy as np
 import faiss
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from config import settings
+
+
+# Model dimension mapping
+MODEL_DIMS = {
+    "BAAI/bge-small-en-v1.5": 384,
+    "BAAI/bge-base-en-v1.5": 768,
+    "BAAI/bge-large-en-v1.5": 1024,
+    "sentence-transformers/all-MiniLM-L6-v2": 384,
+}
 
 
 class DocumentStore:
     def __init__(self):
-        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
-        self.index = faiss.IndexFlatIP(self.model.get_embedding_dimension())
+        model_name = settings.EMBEDDING_MODEL
+        # Map old model names to fastembed-compatible ones
+        if model_name == "all-MiniLM-L6-v2":
+            model_name = "BAAI/bge-small-en-v1.5"
+        self.model = TextEmbedding(model_name)
+        dim = MODEL_DIMS.get(model_name, 384)
+        self.index = faiss.IndexFlatIP(dim)
         self.documents: dict[str, dict] = {}
         self.chunk_metadata: list[dict] = []
         self._id_counter = 0
+
+    def _encode(self, texts: list[str]) -> np.ndarray:
+        embeddings = list(self.model.embed(texts))
+        return np.array(embeddings, dtype=np.float32)
 
     def add_document(self, doc_id: str, chunks: list[dict], filename: str, doc_type: str):
         texts = [c["content"] for c in chunks]
         if not texts:
             return
 
-        embeddings = self.model.encode(texts, normalize_embeddings=True)
-        embeddings = np.array(embeddings, dtype=np.float32)
-
+        embeddings = self._encode(texts)
         self.index.add(embeddings)
 
         for i, chunk in enumerate(chunks):
@@ -48,8 +64,7 @@ class DocumentStore:
         if self.index.ntotal == 0:
             return []
 
-        query_embedding = self.model.encode([query], normalize_embeddings=True)
-        query_embedding = np.array(query_embedding, dtype=np.float32)
+        query_embedding = self._encode([query])
 
         search_k = min(top_k * 3, self.index.ntotal) if doc_id else min(top_k, self.index.ntotal)
         scores, indices = self.index.search(query_embedding, search_k)
@@ -94,8 +109,7 @@ class DocumentStore:
 
         if remaining:
             texts = [m["content"] for m in remaining]
-            embeddings = self.model.encode(texts, normalize_embeddings=True)
-            embeddings = np.array(embeddings, dtype=np.float32)
+            embeddings = self._encode(texts)
             self.index.add(embeddings)
             self.chunk_metadata = remaining
             self._id_counter = len(remaining)
