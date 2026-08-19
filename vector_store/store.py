@@ -1,57 +1,83 @@
 import numpy as np
+import faiss
 import logging
+from groq import Groq
+from config import settings
 
 logger = logging.getLogger("vector_store")
 
 
-def _lazy_imports():
-    import faiss
-    from fastembed import TextEmbedding
-    return faiss, TextEmbedding
-
-
-# Model dimension mapping
-MODEL_DIMS = {
-    "BAAI/bge-small-en-v1.5": 384,
-    "BAAI/bge-base-en-v1.5": 768,
-    "BAAI/bge-large-en-v1.5": 1024,
-    "sentence-transformers/all-MiniLM-L6-v2": 384,
-}
-
-
 class DocumentStore:
+    """Embedding store using Groq API embeddings (no local model needed)."""
+
+    # Groq embedding dimensions for known models
+    EMBED_DIM = 384  # nomic-embed-text-v1.5 returns 768, but we use a subset
+    # We'll use a simple char n-gram fallback if API fails
+
     def __init__(self):
-        from config import settings
-        faiss, TextEmbedding = _lazy_imports()
-
-        model_name = settings.EMBEDDING_MODEL
-        if model_name == "all-MiniLM-L6-v2":
-            model_name = "BAAI/bge-small-en-v1.5"
-
-        logger.info("[STORE] Loading embedding model: %s", model_name)
-        self.model = TextEmbedding(model_name)
-        self.faiss = faiss
-        dim = MODEL_DIMS.get(model_name, 384)
-        self.index = faiss.IndexFlatIP(dim)
+        self.client = None  # Lazy init
+        self.index = None
         self.documents: dict[str, dict] = {}
         self.chunk_metadata: list[dict] = []
         self._id_counter = 0
-        logger.info("[STORE] Ready (dim=%d)", dim)
+        self._dim = None
+        self._use_fallback = False
 
-    def _encode(self, texts: list[str]) -> np.ndarray:
-        embeddings = list(self.model.embed(texts))
-        return np.array(embeddings, dtype=np.float32)
+    def _get_client(self):
+        if self.client is None:
+            self.client = Groq(api_key=settings.GROQ_API_KEY)
+        return self.client
+
+    def _embed(self, texts: list[str]) -> np.ndarray:
+        """Get embeddings via Groq API, fall back to TF-IDF if unavailable."""
+        try:
+            client = self._get_client()
+            result = client.embeddings.create(
+                model="nomic-embed-text-v1.5",
+                input=texts,
+            )
+            embeddings = [item.embedding for item in result.data]
+            return np.array(embeddings, dtype=np.float32)
+        except Exception as e:
+            logger.warning("[STORE] Groq embedding failed (%s), using TF-IDF fallback", str(e)[:60])
+            return self._tfidf_embed(texts)
+
+    def _tfidf_embed(self, texts: list[str]) -> np.ndarray:
+        """Simple TF-IDF fallback — no external API or model needed."""
+        from sklearn.feature_extraction.text import TfidfVectorizer
+
+        if not hasattr(self, '_vectorizer') or self._vectorizer is None:
+            self._vectorizer = TfidfVectorizer(
+                max_features=512,
+                analyzer="char_wb",
+                ngram_range=(2, 4),
+            )
+            # Fit on stored documents + new texts
+            all_texts = [m["content"] for m in self.chunk_metadata] + texts
+            if len(all_texts) < 2:
+                all_texts = texts + ["placeholder"]
+            self._vectorizer.fit(all_texts)
+
+        matrix = self._vectorizer.transform(texts)
+        return matrix.toarray().astype(np.float32)
+
+    def _ensure_index(self, dim: int):
+        if self.index is None or self._dim != dim:
+            self.index = faiss.IndexFlatIP(dim)
+            self._dim = dim
 
     def add_document(self, doc_id: str, chunks: list[dict], filename: str, doc_type: str):
         texts = [c["content"] for c in chunks]
         if not texts:
             return
 
-        embeddings = self._encode(texts)
+        embeddings = self._embed(texts)
+        self._ensure_index(embeddings.shape[1])
+        # Normalize for cosine similarity
+        faiss.normalize_L2(embeddings)
         self.index.add(embeddings)
 
         for i, chunk in enumerate(chunks):
-            global_id = self._id_counter
             self._id_counter += 1
             self.chunk_metadata.append({
                 "doc_id": doc_id,
@@ -70,14 +96,14 @@ class DocumentStore:
         }
 
     def search(self, query: str, top_k: int | None = None, doc_id: str | None = None) -> list[dict]:
-        from config import settings
         if top_k is None:
             top_k = settings.TOP_K_CHUNKS
 
-        if self.index.ntotal == 0:
+        if self.index is None or self.index.ntotal == 0:
             return []
 
-        query_embedding = self._encode([query])
+        query_embedding = self._embed([query])
+        faiss.normalize_L2(query_embedding)
 
         search_k = min(top_k * 3, self.index.ntotal) if doc_id else min(top_k, self.index.ntotal)
         scores, indices = self.index.search(query_embedding, search_k)
@@ -122,7 +148,8 @@ class DocumentStore:
 
         if remaining:
             texts = [m["content"] for m in remaining]
-            embeddings = self._encode(texts)
+            embeddings = self._embed(texts)
+            faiss.normalize_L2(embeddings)
             self.index.add(embeddings)
             self.chunk_metadata = remaining
             self._id_counter = len(remaining)
